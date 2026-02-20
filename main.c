@@ -4,7 +4,8 @@
 #include "hardware/gpio.h"
 #include "hardware/clocks.h"
 #include "hardware/pwm.h"
-#include "hardware/i2c.h"
+// #include "hardware/i2c.h"
+#include "hardware/timer.h"
 
 
 #include "hardware/vreg.h"
@@ -161,6 +162,9 @@ void convert_nes_to_sega_joypad(uint16_t nes_joy_data){
     if ((nes_joy_data1 & NES_RIGHT) == 0) {sega_joysticks[0] &= RIGHT_BUTTON1;}
     if ((nes_joy_data1 & NES_B) == 0) {sega_joysticks[0] &= SHOTL_BUTTON1;}
     if ((nes_joy_data1 & NES_A) == 0) sega_joysticks[0] &= SHOTR_BUTTON1;
+ 
+    if ((nes_joy_data1 & NES_START) == 0) {  hold_sw = 1; }
+
 // second joypad
     if ((nes_joy_data2 & NES_UP) == 0) {sega_joysticks[0] &= UP_BUTTON2;}
     if ((nes_joy_data2 & NES_DOWN) == 0) {sega_joysticks[0] &= DOWN_BUTTON2;}
@@ -170,27 +174,27 @@ void convert_nes_to_sega_joypad(uint16_t nes_joy_data){
     if ((nes_joy_data2 & NES_A) == 0) sega_joysticks[1] &= SHOTR_BUTTON2;
 }
 
-void i2c_PCF8575_init(int CLOCK_I2C) {
+// void i2c_PCF8575_init(int CLOCK_I2C) {
     
-    i2c_init(i2c_PCF8575_port, CLOCK_I2C * 1000);
-    gpio_set_function(PICO_I2C_PCF8575_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(PICO_I2C_PCF8575_SCL_PIN, GPIO_FUNC_I2C);
-    gpio_pull_up(PICO_I2C_PCF8575_SDA_PIN);
-    gpio_pull_up(PICO_I2C_PCF8575_SCL_PIN);
-};
+//     i2c_init(i2c_PCF8575_port, CLOCK_I2C * 1000);
+//     gpio_set_function(PICO_I2C_PCF8575_SDA_PIN, GPIO_FUNC_I2C);
+//     gpio_set_function(PICO_I2C_PCF8575_SCL_PIN, GPIO_FUNC_I2C);
+//     gpio_pull_up(PICO_I2C_PCF8575_SDA_PIN);
+//     gpio_pull_up(PICO_I2C_PCF8575_SCL_PIN);
+// };
 
-void sendI2C(uint8_t command, uint8_t data) {
-    const uint8_t i2c_reg[2] = {command, data};
-    i2c_write_blocking(i2c_PCF8575_port, I2C_PCF8575_ADDR, &i2c_reg[0], 2, false);
-}
+// void sendI2C(uint8_t command, uint8_t data) {
+//     const uint8_t i2c_reg[2] = {command, data};
+//     i2c_write_blocking(i2c_PCF8575_port, I2C_PCF8575_ADDR, &i2c_reg[0], 2, false);
+// }
 
-void resieveI2C(){
-        i2c_read_blocking(i2c_PCF8575_port, I2C_PCF8575_ADDR, &sega_joysticks[0], 2, false);
-};
+// void resieveI2C(){
+//         i2c_read_blocking(i2c_PCF8575_port, I2C_PCF8575_ADDR, &sega_joysticks[0], 2, false);
+// };
 
-static void i2c_PCF8575() {
-        sendI2C(~reg_2, ~reg_1); 
-};
+// static void i2c_PCF8575() {
+//         sendI2C(~reg_2, ~reg_1); 
+// };
 
 void Z80_pin_setup() {
     inInit(MREQ_PIN);
@@ -360,6 +364,7 @@ void __time_critical_func(Z80_loop)() {
         gpio_put(VDP_WR,1);
         gpio_put(VDP_RD,1);
         gpio_put(AUD_W,1);
+
     }
 }
 
@@ -401,13 +406,17 @@ void __time_critical_func(Z80_loop)() {
     // memcpy(sega_cartrige, Yamato_sg, Yamato_sg_len);
     // memcpy(sega_cartrige, retropipe_sg, retropipe_sg_len);
 
-
+    memset(sega_ram, 0x00, 0x4000);
 
     multicore_launch_core1(Z80_loop);
 
-    busy_wait_ms(250);
+    gpio_put(RESET_PIN,1);    busy_wait_ms(200);
+    gpio_put(RESET_PIN,0);    busy_wait_ms(200);    
+    gpio_put(RESET_PIN,1); 
+    
 
-    gpio_put(RESET_PIN,1);    
+int timer_ms =us_to_ms(time_us_32());
+
 
     while (true) {
 
@@ -416,7 +425,21 @@ void __time_critical_func(Z80_loop)() {
             for (size_t i = 0; i < 2; i++){
                 data_joysticks[i] = sega_joysticks[i];
             }
-            start_read_joypad = false;                                   
-        }  
+            start_read_joypad = false;
+            timer_ms =us_to_ms(time_us_32());                                               
+        } 
+
+
+        if((us_to_ms(time_us_32()) - timer_ms) > 100){
+            start_read_joypad = true; 
+            timer_ms =us_to_ms(time_us_32());
+        }
+       if(hold_sw){
+        gpio_put(NMI_PIN,!hold_sw);
+        hold_sw = 0;
+        busy_wait_ms(300);
+        gpio_put(NMI_PIN,!hold_sw);        
+       }
+
     }//while
 }//main
