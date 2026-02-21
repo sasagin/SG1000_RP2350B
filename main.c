@@ -410,12 +410,13 @@ void __time_critical_func(Z80_loop)() {
 
     multicore_launch_core1(Z80_loop);
 
+// reset
     gpio_put(RESET_PIN,1);    busy_wait_ms(200);
     gpio_put(RESET_PIN,0);    busy_wait_ms(200);    
     gpio_put(RESET_PIN,1); 
     
 
-int timer_ms =us_to_ms(time_us_32());
+    int timer_ms =us_to_ms(time_us_32());
 
 
     while (true) {
@@ -429,11 +430,11 @@ int timer_ms =us_to_ms(time_us_32());
             timer_ms =us_to_ms(time_us_32());                                               
         } 
 
-
+// joystick polling call every 100 ms if interrupt polling does not work
         if((us_to_ms(time_us_32()) - timer_ms) > 100){
             start_read_joypad = true; 
-            timer_ms =us_to_ms(time_us_32());
         }
+// 300 ms NMI pulse for pause        
        if(hold_sw){
         gpio_put(NMI_PIN,!hold_sw);
         hold_sw = 0;
