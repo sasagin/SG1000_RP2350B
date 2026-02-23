@@ -173,29 +173,7 @@ void convert_nes_to_sega_joypad(uint16_t nes_joy_data){
     if ((nes_joy_data2 & NES_B) == 0) {sega_joysticks[1] &= SHOTL_BUTTON2;}
     if ((nes_joy_data2 & NES_A) == 0) sega_joysticks[1] &= SHOTR_BUTTON2;
 }
-
-// void i2c_PCF8575_init(int CLOCK_I2C) {
-    
-//     i2c_init(i2c_PCF8575_port, CLOCK_I2C * 1000);
-//     gpio_set_function(PICO_I2C_PCF8575_SDA_PIN, GPIO_FUNC_I2C);
-//     gpio_set_function(PICO_I2C_PCF8575_SCL_PIN, GPIO_FUNC_I2C);
-//     gpio_pull_up(PICO_I2C_PCF8575_SDA_PIN);
-//     gpio_pull_up(PICO_I2C_PCF8575_SCL_PIN);
-// };
-
-// void sendI2C(uint8_t command, uint8_t data) {
-//     const uint8_t i2c_reg[2] = {command, data};
-//     i2c_write_blocking(i2c_PCF8575_port, I2C_PCF8575_ADDR, &i2c_reg[0], 2, false);
-// }
-
-// void resieveI2C(){
-//         i2c_read_blocking(i2c_PCF8575_port, I2C_PCF8575_ADDR, &sega_joysticks[0], 2, false);
-// };
-
-// static void i2c_PCF8575() {
-//         sendI2C(~reg_2, ~reg_1); 
-// };
-
+// init pins 
 void Z80_pin_setup() {
     inInit(MREQ_PIN);
     inInit(WR_PIN);
