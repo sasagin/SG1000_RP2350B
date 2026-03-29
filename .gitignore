@@ -1,0 +1,10 @@
+build/*
+.vscode/*
+
+*.exe
+*.rom
+*.pio.h
+*.zip
+*.7z
+
+
