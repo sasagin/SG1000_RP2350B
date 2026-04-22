@@ -19,6 +19,7 @@
 #include "./Game/Soukoban.h"
 #include "./Game/Yamato.h"
 #include "./Game/retropipe.h"
+#include "./Game/suitesg.h"
 
 #include "Z80pinout.h"
 #include "VDP_int_Z80.pio.h"
@@ -164,6 +165,10 @@ void convert_nes_to_sega_joypad(uint16_t nes_joy_data){
     if ((nes_joy_data1 & NES_A) == 0) sega_joysticks[0] &= SHOTR_BUTTON1;
  
     if ((nes_joy_data1 & NES_START) == 0) {  hold_sw = 1; }
+    // if ((nes_joy_data1 & NES_SELECT) == 0) {      
+    //     hold_sw = 1;
+    // }
+    
 
 // second joypad
     if ((nes_joy_data2 & NES_UP) == 0) {sega_joysticks[0] &= UP_BUTTON2;}
@@ -173,7 +178,7 @@ void convert_nes_to_sega_joypad(uint16_t nes_joy_data){
     if ((nes_joy_data2 & NES_B) == 0) {sega_joysticks[1] &= SHOTL_BUTTON2;}
     if ((nes_joy_data2 & NES_A) == 0) sega_joysticks[1] &= SHOTR_BUTTON2;
 }
-// init pins 
+
 void Z80_pin_setup() {
     inInit(MREQ_PIN);
     inInit(WR_PIN);
@@ -251,7 +256,7 @@ __always_inline static inline void read_sega_io(const uint8_t portIO) {
                 const uint32_t data = ((uint32_t)temp) << 22 ; 
                 gpio_put_masked(DATA_MASK,data);           
                 gpio_set_dir_out_masked(DATA_MASK);
-                start_read_joypad = true;                               
+                // start_read_joypad = true;                               
             }
         break;                    
         default:
@@ -378,23 +383,23 @@ void __time_critical_func(Z80_loop)() {
     VDP_INT_init();
 
     // memcpy(sega_cartrige, test_rom,test_rom_len);
-    memcpy(sega_cartrige, Castle_sg, Castle_sg_len);
+    // memcpy(sega_cartrige, Castle_sg, Castle_sg_len);
     // memcpy(sega_cartrige, pico9918_sg, pico9918_sg_len);
     // memcpy(sega_cartrige, Soukoban_sg, Soukoban_sg_len);
     // memcpy(sega_cartrige, Yamato_sg, Yamato_sg_len);
     // memcpy(sega_cartrige, retropipe_sg, retropipe_sg_len);
+    memcpy(sega_cartrige, suitesg_rom, suitesg_rom_len);
 
     memset(sega_ram, 0x00, 0x4000);
 
     multicore_launch_core1(Z80_loop);
 
-// reset
     gpio_put(RESET_PIN,1);    busy_wait_ms(200);
     gpio_put(RESET_PIN,0);    busy_wait_ms(200);    
     gpio_put(RESET_PIN,1); 
     
 
-    int timer_ms =us_to_ms(time_us_32());
+int timer_ms =us_to_ms(time_us_32());
 
 
     while (true) {
@@ -408,11 +413,11 @@ void __time_critical_func(Z80_loop)() {
             timer_ms =us_to_ms(time_us_32());                                               
         } 
 
-// joystick polling call every 100 ms if interrupt polling does not work
-        if((us_to_ms(time_us_32()) - timer_ms) > 100){
+
+        if((us_to_ms(time_us_32()) - timer_ms) > 8){
             start_read_joypad = true; 
+            timer_ms =us_to_ms(time_us_32());
         }
-// 300 ms NMI pulse for pause        
        if(hold_sw){
         gpio_put(NMI_PIN,!hold_sw);
         hold_sw = 0;
