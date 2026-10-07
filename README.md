@@ -4,4 +4,4 @@ https://github.com/sasagin/RP2350B_GameConsole
 
 https://github.com/visrealm/pico9918/releases
 
-ROM Cartrige to place  "/SG1000/game.rom"
+Place the ROM cartridge on the SD card at "/SG1000/game.rom".
