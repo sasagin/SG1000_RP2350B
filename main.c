@@ -12,14 +12,8 @@
 #include <hardware/structs/qmi.h>
 #include <hardware/structs/xip.h>
 
-
-#include "./Game/test.h"
-#include "./Game/Castle.h"
-#include "./Game/pico9918.h"
-#include "./Game/Soukoban.h"
-#include "./Game/Yamato.h"
-#include "./Game/retropipe.h"
-#include "./Game/suitesg.h"
+#include "ff.h"
+#include "f_util.h"
 
 #include "Z80pinout.h"
 #include "VDP_int_Z80.pio.h"
@@ -32,32 +26,32 @@ Button      1REG        2REG
 */
 
 // NES-compatible gamepad (shift register) pins
-#define PIN_NES_JOYPAD_CLOCK 42
-#define PIN_NES_JOYPAD_LATCH 43
-#define PIN_NES_JOYPAD_DATA1  44
-#define PIN_NES_JOYPAD_DATA2  45
+#define PIN_NES_JOYPAD_CLOCK 32
+#define PIN_NES_JOYPAD_LATCH 33
+#define PIN_NES_JOYPAD_DATA1  34
+#define PIN_NES_JOYPAD_DATA2  35
 #define NES_JOYPAD_SHIFT_COUNT 8
 
-#define i2c_PCF8575_port (i2c0)
-#define CLOCK_I2C_400kHz (400)
-#define I2C_PCF8575_ADDR (0x20)
-#define PICO_I2C_PCF8575_SDA_PIN (0)
-#define PICO_I2C_PCF8575_SCL_PIN (1)
+// #define i2c_PCF8575_port (i2c0)
+// #define CLOCK_I2C_400kHz (400)
+// #define I2C_PCF8575_ADDR (0x20)
+// #define PICO_I2C_PCF8575_SDA_PIN (0)
+// #define PICO_I2C_PCF8575_SCL_PIN (1)
 
 //RESET
-#define RESET_PIN      34
+#define RESET_PIN      44
 #define RESET_MASK (1ULL << RESET_PIN)
 
 // /VDP_RD 
-#define VDP_RD      38
+#define VDP_RD      36
 #define VDP_RD_MASK (1ULL << VDP_RD)
 
 // /VDP_WR 
-#define VDP_WR      39
+#define VDP_WR      37
 #define VDP_WR_MASK (1ULL << VDP_WR)
 
 // /AUD_W
-#define AUD_W       41
+#define AUD_W       39
 #define AUD_W_MASK (1ULL << AUD_W)
 
 #define VDP_INT_PIO     pio0
@@ -253,7 +247,7 @@ __always_inline static inline void read_sega_io(const uint8_t portIO) {
                 else if((portIO&0xE1) == 0xC0){                   
                     temp = data_joysticks[0];                       //  joypad 1
                 }
-                const uint32_t data = ((uint32_t)temp) << 22 ; 
+                const uint32_t data = ((uint32_t)temp) <<16 ; 
                 gpio_put_masked(DATA_MASK,data);           
                 gpio_set_dir_out_masked(DATA_MASK);
                 // start_read_joypad = true;                               
@@ -310,9 +304,9 @@ void __time_critical_func(Z80_loop)() {
         //------------memory ok-----------------
 
         while(!(gpio_get_all64() & MREQ_MASK)) {                                    // memory read write
-                uint16_t address = (uint16_t)((gpio_get_all() >> 6) & 0x0000ffff);  
+                uint16_t address = (uint16_t)((gpio_get_all()) & 0x0000ffff);  
                 while(!(gpio_get_all() & READ_MASK)) {                                  //  read from         
-                    const uint32_t data = read_sega_memory(address) << 22;
+                    const uint32_t data = read_sega_memory(address) << 16;
                     gpio_put_masked(DATA_MASK,data);
                     gpio_set_dir_out_masked(DATA_MASK);
                 }
@@ -321,14 +315,14 @@ void __time_critical_func(Z80_loop)() {
                             
                 while(!(gpio_get_all() & WRITE_MASK)) {                                 // write to ram                            
                         // : SEGA RAM
-                    uint8_t data_to_ram = (uint8_t)((gpio_get_all() >>22) & 0x000000FF);
+                    uint8_t data_to_ram = (uint8_t)((gpio_get_all() >>16) & 0x000000FF);
                     write_sega_memory(address,data_to_ram);                 
                 }         
         }
     
     // io port
         while(!(gpio_get_all64() & IORQ_MASK)) {
-            uint16_t address = (gpio_get_all() >> 6) ;              // mask io port address
+            uint16_t address = (gpio_get_all()) ;              // mask io port address
             uint8_t portIO = (uint8_t)(0x00FF & address);
 
     // read from IO             
@@ -338,7 +332,7 @@ void __time_critical_func(Z80_loop)() {
     // write to IO        
             while(!(gpio_get_all64() & WRITE_MASK)) {                              // write to IO
 
-                uint8_t datawritetoio = (uint8_t)((gpio_get_all() >>22)&0x000000ff);
+                uint8_t datawritetoio = (uint8_t)((gpio_get_all() >>16)&0x000000ff);
                 write_sega_io(portIO,datawritetoio);
                 }
             gpio_set_dir_in_masked(DATA_MASK);
@@ -382,16 +376,32 @@ void __time_critical_func(Z80_loop)() {
 
     VDP_INT_init();
 
-    // memcpy(sega_cartrige, test_rom,test_rom_len);
-    // memcpy(sega_cartrige, Castle_sg, Castle_sg_len);
-    // memcpy(sega_cartrige, pico9918_sg, pico9918_sg_len);
-    // memcpy(sega_cartrige, Soukoban_sg, Soukoban_sg_len);
-    // memcpy(sega_cartrige, Yamato_sg, Yamato_sg_len);
-    // memcpy(sega_cartrige, retropipe_sg, retropipe_sg_len);
-    memcpy(sega_cartrige, suitesg_rom, suitesg_rom_len);
 
-    memset(sega_ram, 0x00, 0x4000);
+    FATFS fs;
+    FIL file_sd;
+    UINT br;
+    FRESULT res;      
+ 
+        // Mount SD card filesystem
+    if (FR_OK != f_mount(&fs, "", 1)) {
+        // while (!stdio_usb_connected()) { tight_loop_contents(); }
+        printf("SD Card not inserted or SD Card error!");
+    }
+    
+        // Load BIOS
+    res = f_open(&file_sd, "/SG1000/game.rom", FA_READ);
+    if (res != FR_OK) {
+        printf("Cannot open GAME ROM!\n");
+    }
 
+    res = f_read(&file_sd, sega_cartrige, 0x8000, &br);
+    f_close(&file_sd);
+
+
+    //CLEAR RAM
+    // memset(sega_ram, 0x00, 0x4000);
+
+//start
     multicore_launch_core1(Z80_loop);
 
     gpio_put(RESET_PIN,1);    busy_wait_ms(200);
