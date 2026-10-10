@@ -12,6 +12,8 @@
 #include <hardware/structs/qmi.h>
 #include <hardware/structs/xip.h>
 
+#include <string.h>
+
 #include "ff.h"
 #include "f_util.h"
 
@@ -377,29 +379,57 @@ void __time_critical_func(Z80_loop)() {
     VDP_INT_init();
 
 
-    FATFS fs;
-    FIL file_sd;
-    UINT br;
-    FRESULT res;      
- 
-        // Mount SD card filesystem
-    if (FR_OK != f_mount(&fs, "", 1)) {
-        // while (!stdio_usb_connected()) { tight_loop_contents(); }
-        printf("SD Card not inserted or SD Card error!");
-    }
-    
-        // Load BIOS
-    res = f_open(&file_sd, "/SG1000/game.rom", FA_READ);
-    if (res != FR_OK) {
-        printf("Cannot open GAME ROM!\n");
-    }
+FATFS fs;
+FIL file_sd;
+UINT br;
+FRESULT res;
 
-    res = f_read(&file_sd, sega_cartrige, 0x8000, &br);
-    f_close(&file_sd);
+// 1. Монтируем SD
+if (FR_OK != f_mount(&fs, "", 1)) {
+    printf("SD Card not mounted!\n");
+    while (1) {}
+}
+
+// 2. Узнаём реальный размер файла
+const char *rom_path = "/SG1000/game.rom";
+FILINFO fno;
+res = f_stat(rom_path, &fno);
+if (res != FR_OK) {
+    printf("ROM file not found: %s\n", rom_path);
+    while (1) {}
+}
+
+size_t file_size = fno.fsize;
+const size_t max_sg1000_rom = 0x8000; // 32 КБ — типичный максимум для SG1000
+
+if (file_size == 0 || file_size > max_sg1000_rom) {
+    printf("Invalid ROM size: %lu bytes (max %lu)\n",
+           (unsigned long)file_size, (unsigned long)max_sg1000_rom);
+    while (1) {}
+}
+printf("ROM size detected: %lu bytes\n", (unsigned long)file_size);
+
+// 3. Открываем и читаем ровно file_size байт
+res = f_open(&file_sd, rom_path, FA_READ);
+if (res != FR_OK) {
+    printf("Cannot open ROM file!\n");
+    while (1) {}
+}
+res = f_read(&file_sd, sega_cartrige, file_size, &br);
+f_close(&file_sd);
+
+// 4. Жёсткая проверка: сколько реально прочитали
+if (res != FR_OK || br != file_size) {
+    printf("ROM read error: expected %lu, got %lu\n",
+           (unsigned long)file_size, (unsigned long)br);
+    while (1) {}
+}
+printf("ROM loaded: %lu bytes from %s\n", (unsigned long)br, rom_path);
+
 
 
     //CLEAR RAM
-    // memset(sega_ram, 0x00, 0x4000);
+    memset(sega_ram, 0x00, 0x4000);
 
 //start
     multicore_launch_core1(Z80_loop);
